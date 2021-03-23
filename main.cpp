@@ -6,10 +6,22 @@
 #include<algorithm>
 #include<time.h>
 using namespace std;
-
-  
-void stotm(tm* time, string strtmp){ //轉資料格式 
-  
+// ============================================================
+struct information {
+  string LON;
+  string LAT;
+  string time;
+};
+// 
+struct dat{
+  string TAG;
+  vector<information> info;
+  vector<string> rng;
+  vector<int> rng_ind;
+};
+// ============================================================
+void stotm(tm* time, string strtmp){
+	// s -> string; to ; tm -> time
   stringstream ss(strtmp);
   string temp;
   
@@ -21,245 +33,261 @@ void stotm(tm* time, string strtmp){ //轉資料格式
   getline(ss, temp, ':');
   time->tm_sec = stoi(temp);  
 }
-
-void prttm(string str){ //時間的輸出 
-  time_t rawtime;
+// ============================================================
+/* 
+void prttm(string str){ 
+  // print -> prt; tm -> time 
+  // for debug //
   struct tm *tm1;
   char buffer[80];
 
-  tm1 = localtime ( &rawtime );
+  tm1 = new struct tm();
   stotm(tm1, str);
   strftime(buffer, 80, "%H:%M:%S", tm1);
   cout << buffer << ", "; 
-   
 }
+*/
+// ============================================================
+information ReadLine(string line, string* TAG){
+  stringstream ss(line);
+  information info_tmp;
 
-int main(){
-	//初始化宣告 
+  getline(ss, info_tmp.time, '\t');
+  getline(ss, info_tmp.LON , '\t');
+  getline(ss, info_tmp.LAT , '\t');
+  getline(ss, *TAG, '\t');
+
+  return info_tmp;
+}
+// ============================================================
+/*
+void prtInfo(vector<information>* info){
+  // for debug //
+  for (int i =0; i<info->size(); i++){
+    cout << i << ", " 
+	 << info->at(i).time << ", "
+	 << info->at(i).LON  << ", "
+	 << info->at(i).LAT  << endl;
+	 
+	 
+	 
+  }
+}
+*/
+// ============================================================
+/*
+void prtInfo2(vector<information>::iterator it_begin,
+	      vector<information>::iterator it_end){
+  // for debug //
+  int ind=0;
+  for ( vector<information>::iterator it = it_begin;
+	it < it_end; it++){
+    
+    cout << ind << ", "
+	 << it-> time << ", "
+	 << it-> LON  << ", "
+	 << it-> LAT  << endl;
+    ind++;
+  }
+}
+*/
+// ============================================================
+bool tm_greater(const information &i, const information &j){
+  return i.time < j.time;
+}
+bool tm_equal(const information &i, const information &j){
+  return i.time == j.time;
+}
+bool LON_greater(const information &i, const information &j){
+  return i.LON < j.LON;
+}
+bool LON_equal(const information &i, const information &j){
+  return i.LON == j.LON;
+}
+bool LAT_greater(const information &i, const information &j){
+  return i.LAT < j.LAT;
+}
+// ============================================================
+void SortByLONLAT(vector<information>::iterator it_begin,
+		  vector<information>::iterator it_end){
+  vector<information>::iterator it;
+  pair<vector<information>::iterator,
+       vector<information>::iterator> bounds;
+
+  sort(it_begin, it_end, LON_greater); // Sort by LON
+
+  bounds.second = it_begin;
+  it = adjacent_find(bounds.second, it_end, LON_equal);
+  while(it != it_end){
+    bounds=equal_range(bounds.second, it_end, *it, LON_greater); 
+    sort(bounds.first, bounds.second, LAT_greater); // Sort by LAT
+    // 更新搜尋範圍
+    it = adjacent_find(--bounds.second, it_end, LON_equal);
+  }
+}
+// ============================================================
+void SortInfo(vector<information>::iterator it_begin,
+	      vector<information>::iterator it_end){
+  //
+  vector<information>::iterator it;
+  pair<vector<information>::iterator,
+       vector<information>::iterator> bounds;
+  //
+  sort(it_begin, it_end, tm_greater);
+	
+  // 找下一個重複值
+  bounds.second = it_begin;
+  it = adjacent_find(bounds.second, it_end, tm_equal);
+  while(it != it_end){
+    // 計算重複值的索引範圍
+    bounds=equal_range(bounds.second, it_end, *it, tm_greater); 
+    SortByLONLAT(bounds.first, bounds.second); // sort 
+    
+    // 更新搜尋範圍
+    it = adjacent_find(--bounds.second, it_end, tm_equal);
+  }
+}
+// ============================================================
+void pushDat(vector<dat>* D, dat* RDat){
+	// R -> read; dat -> read data 
+  // sort by time
+  SortInfo(RDat->info.begin(), RDat->info.end());
+  // Remove duplicates
+  RDat->info.erase( unique(RDat->info.begin(), RDat->info.end(),
+			   [](const information &i, const information &j)
+			   { return ( (i.time == j.time) &&
+				      (i.LON == j.LON) &&
+				      (i.LAT == j.LAT) ); } ) ,
+		    RDat->info.end() );
+
+  D->push_back(*RDat) ;
+}
+// ============================================================
+void ReadData(vector<dat>*D, string fname){
   fstream ifile;
   string line;
+  string temp;
+  information info_tmp;
+  dat Read_dat;
   
-  vector<string> time_str;
-  vector<string> LON;
-  vector<string> LAT;
-  vector<string> TAG_tmp;
-  vector<string> TAG;
-  // 讀取csv並分類 
-  ifile.open("data.csv", ios::in);
+  
+  ifile.open(fname, ios::in);
   if(! ifile){
-     cerr << "Can't open file!\n";
-     exit(1);  
+    cerr << "Can't open file!\n";
+    exit(1);  
   }
+
+  getline(ifile,line); // skip header
+  getline(ifile,line); // first data
+  info_tmp = ReadLine(line, &temp);
+  Read_dat.info.push_back(info_tmp);  
+  Read_dat.TAG = temp;
 
   while(getline(ifile,line)){
-    stringstream ss(line);
-    string temp;
-
-    getline(ss, temp, '\t');
-    time_str.push_back(temp);
-
-    getline(ss, temp, '\t');
-    LON.push_back(temp);
-
-    getline(ss, temp, '\t');
-    LAT.push_back(temp);
-
-    getline(ss, temp, '\t');
-    TAG_tmp.push_back(temp);
-  }
-	ifile.close();	
-
-  vector< vector<string> > time_vec;
-  vector<int> counter;
-  {
-    vector<string> tmp_time;
-    int ind= 0;
-    int i  = 1;
-
-    TAG.push_back(TAG_tmp[1]);
-    tmp_time.push_back(time_str[1]);
-    while( i < TAG_tmp.size()){
-      if( TAG_tmp[i] != TAG[ind]){
-      	
-	sort(tmp_time.begin(), tmp_time.end());
-	tmp_time.erase( unique(tmp_time.begin(), tmp_time.end()),
-			tmp_time.end() );
-			
-	counter.push_back(tmp_time.size());
-      
-	TAG.push_back(TAG_tmp[i]);
-
-	time_vec.push_back(tmp_time);
-	tmp_time.clear();
-	ind += 1;
-      }
-      tmp_time.push_back(time_str[i]);
-      i += 1;
-    }
-
-    sort(tmp_time.begin(), tmp_time.end());
-    tmp_time.erase( unique(tmp_time.begin(), tmp_time.end()),
-		    tmp_time.end() );
-    counter.push_back(tmp_time.size());
-    time_vec.push_back(tmp_time);
-    tmp_time.clear();
-  }
-  
-  //writefile
-  fstream file;
- 
-  file.open("write.csv", ios::out | ios::trunc);
-  for (int i=0; i<TAG.size(); ++i){
-	 	file << TAG[i] << "	"<< counter[i] << endl;
-	 }
-  file.close();
-  
-  
-  // ========================================
-  for (int i =0; i<TAG.size();i++){
-    cout << i << " ;" << TAG[i] << ": " << counter[i] << endl;
-  }
-
-  cout << "==============================" << endl;
-  // ========================================
-  // ========================================
-
-  vector< vector<string> > time_rng;  // 範圍 
-  vector< vector<int> > time_rng_ind; // 
-  {
-
-    vector<int> rng_ind;
-    vector<string> rng_tmp;
-    time_t rawtime;
-    struct tm tm1,tm2;
-    struct tm *tm_ptr1;
-    struct tm *tm_ptr2;
-
-    tm1 = *localtime ( &rawtime );
-    tm2 = tm1;
-    tm_ptr1 = &tm1;
-    tm_ptr2 = &tm2;
-
-    // ------------------------------
-    // time_vec.size(): CELL 總個數 
-    for(int k =0; k<time_vec.size(); k++){
-    	rng_tmp.push_back(time_vec[k][0]); // start 
-      	rng_ind.push_back(0);
-
-      	stotm(tm_ptr1, time_vec[k][0]); //第一個時間轉成tm 
-
-		// time_vec[k].size(): CELL_??? 底下時間的個數 
-  	    for(int j =1; j < time_vec[k].size(); j++){
-			stotm(tm_ptr2, time_vec[k][j]); //第二個時間轉成tm 
-			if(difftime(mktime(tm_ptr2), mktime(tm_ptr1)) <= 3600){ //diff 相減2個時間 
-	  			swap(tm_ptr1,tm_ptr2);
-			}
-			else{
-	  			rng_tmp.push_back(time_vec[k][j-1]); // 範圍結束時間 
-	  			rng_tmp.push_back(time_vec[k][j]);   // 下一個範圍的開始時間 
-
-	  			rng_ind.push_back(j-1);
-	  			rng_ind.push_back(j);
-	  			stotm(tm_ptr1, time_vec[k][j]);
-			}
-      	}
-      	if(rng_tmp.size()%2){ // 時間範圍的個數為奇數    start1-end1, start2-end2, start3   
-			rng_tmp.push_back(time_vec[k].back());  // 最後一個範圍的時間結束時間,為時間的最後一個 
-			rng_ind.push_back(time_vec[k].size()-1);
-      	}
-
-
-      	time_rng.push_back(rng_tmp);
-      	time_rng_ind.push_back(rng_ind);
-      	rng_tmp.clear();
-
-      	rng_ind.clear();
-    }
-  }
-
-
-  for (int k =0; k<time_rng.size();k++){
-    cout << TAG[k] << ", counter: " << counter[k]
-	 << ", range: " << time_rng[k].size()/2 << endl;
-    cout << "========================================" << endl;
+    info_tmp = ReadLine(line, &temp);
     
-    for (int i =0; i<time_rng[k].size();i+=2){
-      cout << "<< " << time_rng[k][i] << " ~ "
-	   << time_rng[k][i+1] << " >>" << endl;
-      for(int j = time_rng_ind[k][i]; j<= time_rng_ind[k][i+1]; j++)
-	prttm(time_vec[k][j]);
-      cout << endl << endl;
+    if (temp != Read_dat.TAG){
+      // push data to D1
+      pushDat(D, &Read_dat);
       
+      // get new data to Read_dat
+      Read_dat.TAG = temp;
+      Read_dat.info.clear();
     }
-    
-    cout << "========================================" << endl;
+    Read_dat.info.push_back(info_tmp);
+  }
+  pushDat(D, &Read_dat);
 }
+// ============================================================
+void CompRng(dat* cell_dat){
+	// Compute range 
+  time_t rawtime;
+  time ( &rawtime );
+  struct tm temp1, temp2;
+  struct tm *tm1, *tm2;
+ 
+  temp1 = *localtime(&rawtime);
+  temp2 = *localtime(&rawtime);
+  tm1 = &temp1;
+  tm2 = &temp2;
+  
+   
+  cell_dat->rng.push_back(cell_dat->info[0].time); //放進第一筆資料 
+  cell_dat->rng_ind.push_back(0);  //時間範圍的index 
+  stotm(tm1, cell_dat->info[0].time);
+  
+  for(int j =1; j < cell_dat->info.size(); j++){
+    stotm(tm2, cell_dat->info[j].time);
+ 
+	if(difftime(mktime(tm2), mktime(tm1)) <= 3600){
+      swap(tm1,tm2);
+    }
+    else{
+      cell_dat->rng.push_back(cell_dat->info[j-1].time);
+      cell_dat->rng.push_back(cell_dat->info[ j ].time);
+      
+      cell_dat->rng_ind.push_back(j-1);
+      cell_dat->rng_ind.push_back(j);
+      stotm(tm1, cell_dat->info[j].time);
+    }
+  }
+  if(cell_dat->rng.size()%2){
+    cell_dat->rng.push_back(cell_dat->info.back().time);
+    cell_dat->rng_ind.push_back(cell_dat->info.size()-1);
+  }
+  
+}
+// ============================================================
+int main(){
+  // part 1
+  vector<dat>* Dat = new vector<dat>();
+  ReadData(Dat, "data.csv");
+
+  // part 2
+  
+  for(int i = 0; i < Dat->size(); i++)
+    CompRng(&Dat->at(i)); // Compute range
+
+  // sort by counter
+  sort(Dat->begin(), Dat->end(),
+       [](const dat &i, const dat &j) { return i.info.size() > j.info.size(); } );
+  
+
+  // ----------------------------------------
+  cout << "TAG,Counter,Num_Range,Range" << endl;
+  for (int i = 0; i < Dat->size(); i++){
+    dat* cell;
+    cell = &Dat->at(i);
     
-  ifile.open("task2.txt", ios::out | ios::trunc);
+    cout <<cell -> TAG << ","
+	 << cell -> info.size() <<  ","
+         << cell -> rng.size()/2 << ",[ ";
+    for (int j=0; j < cell->rng.size(); j+=2){
+    	cout << cell->rng[j] << " ~ " << cell->rng[j+1] << "; "; 
+	}
+	cout << " ]" <<endl;
+
+  }
+  // 存取 
+  fstream ifile;
+  ifile.open("task1.csv", ios::out | ios::trunc);
   if(! ifile){
      cerr << "Can't open file!\n";
      exit(1);  
   	}
-  
-	 for (int k = 0; k < time_rng.size();k++){
-	 	ifile << TAG[k] << ": ";
-			for(int i=0; i<time_rng[k].size(); i+=2){
-				ifile << "[ " << time_rng[k][i] << " ~ " 
-				<< time_rng[k][i+1] << " ], "; 
-			}
-			ifile << endl;
-
-	 }
-  	ifile.close();
-  	////////////
-  	ifile.open("cell1.csv", ios::out | ios::trunc);
+  	ifile << "TAG,Counter,Num_Range,Range" << endl;
+  for (int i = 0; i < Dat->size(); i++){
+    dat* cell;
+    cell = &Dat->at(i);
+    
+    ifile <<cell -> TAG << ","
+	 << cell -> info.size() <<  ","
+         << cell -> rng.size()/2 << ",[ ";
+    for (int j=0; j < cell->rng.size(); j+=2){
+    	ifile << cell->rng[j] << " ~ " << cell->rng[j+1] << "; "; 
+	}
+	ifile << " ]" <<endl;
+  	} 
   	
-  if(! ifile){
-     cerr << "Can't open file!\n";
-     exit(1);  
-  	}
-  	ifile << "DATE_TIME,LON,LAT,TAG,marker-color" << endl;
-	 for (int k = 0; k < TAG_tmp.size();k++){
-	 	if( TAG_tmp[k] == TAG_tmp[2341] ){
-	 		ifile << time_str[k] << ","
-	 		<< LON[k] << "," << LAT[k] << "," 
-	 		<< TAG_tmp[k] << ",\"#ff002b\"" << endl;
-	 		continue;
-		 }
-		 
-	 	if( TAG_tmp[k] == TAG_tmp[884] ){
-	 		ifile << time_str[k] << ","
-	 		<< LON[k] << "," << LAT[k] << "," 
-	 		<< TAG_tmp[k] << ",\"#00ff99\"" << endl;
-	 		continue;
-		 }
-	 	
-	 	if( TAG_tmp[k] == TAG_tmp[1885] ){
-	 		ifile << time_str[k] << ","
-	 		<< LON[k] << "," << LAT[k] << "," 
-	 		<< TAG_tmp[k] << ",\"#00ff00\"" << endl;
-	 		continue;
-		 }
-		 
-		if( TAG_tmp[k] == TAG_tmp[1112] ){
-	 		ifile << time_str[k] << ","
-	 		<< LON[k] << "," << LAT[k] << "," 
-	 		<< TAG_tmp[k] << ",\"#0000ff\"" << endl;
-	 		continue;
-		 }
-		
-	 	if( TAG_tmp[k] == TAG_tmp.back() ){
-	 		ifile << time_str[k] << ","
-	 		<< LON[k] << "," << LAT[k] << "," 
-	 		<< TAG_tmp[k] << ",\"#ff7800\"" << endl;
-	 		continue;
-		 }
-	 	
-			
-
-	 }
-  	ifile.close();
-  	
-  
   return 0;
 }
